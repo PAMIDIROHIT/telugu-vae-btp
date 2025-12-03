@@ -1,0 +1,12 @@
+======================================================================
+Step 1: Installing PyTorch
+======================================================================
+✓ PyTorch installed
+
+Step 2: Verifying PyTorch
+======================================================================
+✓ PyTorch 2.9.1+cu128
+/home/mohanganesh/vae_env/lib/python3.12/site-packages/torch/cuda/__init__.py:182: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 11040). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+✓ CUDA available: False
+✗ CUDA not available!
