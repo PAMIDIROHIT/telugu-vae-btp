@@ -97,7 +97,11 @@ def train_epoch(model, train_loader, optimizer, device, beta=1.0):
                 recon_x, mu, logvar = output
         
         # Compute loss
-        loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar, beta=beta)
+        # BetaVAE uses self.beta internally, VanillaVAE can accept beta parameter
+        if model.__class__.__name__ == 'BetaVAE':
+            loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar)
+        else:
+            loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar, beta=beta)
         
         # Backward pass
         loss.backward()
@@ -138,7 +142,10 @@ def validate(model, val_loader, device, beta=1.0):
         else:
             recon_x, mu, logvar = output
         
-        loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar, beta=beta)
+        if model.__class__.__name__ == 'BetaVAE':
+            loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar)
+        else:
+            loss, recon_loss, kl_loss = model.loss(recon_x, x, mu, logvar, beta=beta)
         
         total_loss += loss.item()
         total_recon += recon_loss.item()
