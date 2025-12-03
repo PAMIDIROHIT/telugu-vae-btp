@@ -1,0 +1,33 @@
+# Baseline Beta-VAE Training Configuration
+# Telugu Glyph Generation - BTP Project
+# Target: Research-grade model for conference publication
+
+model:
+  type: "beta_vae"
+  latent_dim: 32               # Standard latent dimensionality
+  beta: 2.0                    # Moderate disentanglement pressure
+  in_channels: 1              # Grayscale images
+  hidden_dims: [32, 64, 128]  # Progressive feature extraction
+
+training:
+  batch_size: 64              # Balanced for convergence
+  num_epochs: 50              # Sufficient for convergence on this dataset
+  learning_rate: 0.001        # Adam default
+  lr_scheduler: "cosine"      # Smooth learning rate decay
+  device: "cpu"               # Using CPU due to CUDA arch mismatch
+  num_workers: 4              # Parallel data loading
+  early_stopping_patience: 15 # Early stopping if no improvement
+
+data:
+  dataset_path: "data/raw/"
+  metadata_path: "data/raw/metadata.csv"
+  train_split: 0.8            # 8,640 training samples
+
+logging:
+  experiment_dir: "experiments/baseline_beta_vae"
+  checkpoint_dir: "checkpoints/"
+  log_interval: 20
+  validation_interval: 1
+  checkpoint_interval: 10
+
+seed: 42
