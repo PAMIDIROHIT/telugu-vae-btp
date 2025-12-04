@@ -63,7 +63,7 @@ def main():
         dest_path = os.path.join(class_dir, dest_name)
         try:
             im = Image.open(png).convert("L")  # grayscale
-            im = im.resize(IMG_SIZE, Image.ANTIALIAS)
+            im = im.resize(IMG_SIZE, Image.Resampling.LANCZOS)
             im.save(dest_path)
             count_per_class.setdefault(class_id, 0)
             count_per_class[class_id] += 1
