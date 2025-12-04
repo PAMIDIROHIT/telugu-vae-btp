@@ -33,9 +33,9 @@ class ConvEncoder(nn.Module):
         
         self.encoder = nn.Sequential(*modules)
         
-        # Calculate flattened size (assuming 64x64 input)
-        # After each stride-2 conv: 64 -> 32 -> 16 -> 8
-        self.flatten_size = hidden_dims[-1] * 8 * 8
+        # Calculate flattened size (for 32x32 input)
+        # After each stride-2 conv: 32 -> 16 -> 8 -> 4
+        self.flatten_size = hidden_dims[-1] * 4 * 4
         
         # Latent space projection
         self.fc_mu = nn.Linear(self.flatten_size, latent_dim)
@@ -72,7 +72,7 @@ class ConvDecoder(nn.Module):
             hidden_dims = [128, 64, 32]
         
         self.latent_dim = latent_dim
-        self.fc_hidden_size = hidden_dims[0] * 8 * 8
+        self.fc_hidden_size = hidden_dims[0] * 4 * 4
         
         # Linear layer to expand latent vector
         self.fc = nn.Linear(latent_dim, self.fc_hidden_size)
@@ -106,7 +106,7 @@ class ConvDecoder(nn.Module):
             Reconstructed image (batch_size, 1, 64, 64)
         """
         x = self.fc(z)
-        x = x.view(x.size(0), -1, 8, 8)
+        x = x.view(x.size(0), -1, 4, 4)
         x = self.decoder(x)
         return x
 
@@ -141,7 +141,7 @@ class ConditionalEncoder(nn.Module):
             current_dim = hidden_dim
         
         self.encoder = nn.Sequential(*modules)
-        self.flatten_size = hidden_dims[-1] * 8 * 8
+        self.flatten_size = hidden_dims[-1] * 4 * 4
         
         # Concatenate embedded condition before projection
         self.fc_input_size = self.flatten_size + 64
@@ -191,7 +191,7 @@ class ConditionalDecoder(nn.Module):
         
         # Concatenate latent with condition
         self.fc_input_size = latent_dim + 64
-        self.fc_hidden_size = hidden_dims[0] * 8 * 8
+        self.fc_hidden_size = hidden_dims[0] * 4 * 4
         
         self.fc = nn.Linear(self.fc_input_size, self.fc_hidden_size)
         
@@ -227,6 +227,6 @@ class ConditionalDecoder(nn.Module):
         z = torch.cat([z, c_embed], dim=1)
         
         x = self.fc(z)
-        x = x.view(x.size(0), -1, 8, 8)
+        x = x.view(x.size(0), -1, 4, 4)
         x = self.decoder(x)
         return x

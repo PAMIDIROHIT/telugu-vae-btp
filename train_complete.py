@@ -30,7 +30,13 @@ from models.vae import BetaVAE, ConditionalVAE
 
 # Configuration
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Disable cuDNN for K80 compatibility
+torch.backends.cudnn.enabled = False
+
 print(f"Using device: {DEVICE}")
+print(f"cuDNN enabled: {torch.backends.cudnn.enabled}")
+print()
 
 # Hyperparameters
 CONFIG = {
