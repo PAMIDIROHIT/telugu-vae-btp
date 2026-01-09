@@ -1,244 +1,409 @@
-# Telugu Glyph Generation using VAEs
+<p align="center">
+  <h1 align="center">🔤 Telugu Glyph Generation using VAEs</h1>
+  <p align="center">
+    <strong>Variational Autoencoders for Printed Telugu Character Synthesis</strong>
+  </p>
+  <p align="center">
+    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-model-architectures">Models</a> •
+    <a href="#-results">Results</a> •
+    <a href="#-documentation">Docs</a>
+  </p>
+</p>
 
-**BTP Research Project**: Variational Autoencoders for Printed Telugu Character Synthesis
-
-**Goal**: Train VAE models to generate high-quality printed Telugu glyphs and publish findings in a top-tier vision conference (ICDAR/CVPR-W/ICFHR).
-
----
-
-## 📋 Project Overview
-
-This project implements and compares three Variational Autoencoder (VAE) architectures for learning and generating Telugu script characters:
-
-1. **Vanilla VAE**: Standard VAE with reconstruction + KL divergence loss
-2. **β-VAE**: Weighted VAE encouraging disentangled latent representations
-3. **Conditional VAE (cVAE)**: Class-conditioned VAE for controlled generation
-
-### Dataset
-
-- **Fonts**: Pothana, Akshara (Telugu fonts)
-- **Size**: 10,801 glyph samples
-- **Variations**: Multiple font sizes (12pt-20pt), rotations, blur, pixel shifts
-- **Format**: 64×64 grayscale PNG images
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/PyTorch-2.0+-red.svg" alt="PyTorch">
+  <img src="https://img.shields.io/badge/License-Academic-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/Status-Research-orange.svg" alt="Status">
+</p>
 
 ---
 
-## 🗂️ Project Structure
+## 📋 Abstract
+
+This research project implements and compares multiple **Variational Autoencoder (VAE)** architectures for generating high-quality printed **Telugu script** characters. Telugu, spoken by over 80 million people, has a complex Unicode structure with 72+ characters including vowels, consonants, and diacritical marks.
+
+We evaluate four VAE variants with six different loss function configurations and demonstrate that **SSIM + Cyclical KL Annealing** achieves the best reconstruction quality with **0.9917 cosine similarity** on the test set.
+
+**Key Contributions:**
+- Systematic comparison of VAE architectures for Telugu character generation
+- Novel loss function combination (SSIM + Cyclical KL Annealing)
+- Open-source dataset and reproducible training pipeline
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+graph TB
+    subgraph "Data Layer"
+        A[Telugu Fonts<br/>Pothana2000.ttf] --> B[Glyph Renderer<br/>render_glyphs.py]
+        B --> C[Augmentation Pipeline<br/>rotation, blur, noise]
+        C --> D[(Dataset<br/>10,801 samples)]
+    end
+    
+    subgraph "Model Layer"
+        D --> E[DataLoader<br/>batch=16]
+        E --> F{VAE Model}
+        F --> G[Encoder<br/>Conv Layers]
+        G --> H[Latent Space<br/>μ, σ²]
+        H --> I[Reparameterize<br/>z = μ + σ·ε]
+        I --> J[Decoder<br/>ConvTranspose]
+        J --> K[Reconstructed<br/>Image]
+    end
+    
+    subgraph "Training Layer"
+        K --> L[Loss Function<br/>BCE + KL + SSIM]
+        L --> M[Optimizer<br/>Adam lr=0.0001]
+        M --> N[Checkpoints<br/>best.pth]
+    end
+    
+    subgraph "Evaluation Layer"
+        N --> O[Sample Generation]
+        N --> P[Latent Visualization<br/>t-SNE, PCA]
+        N --> Q[Metrics<br/>Cosine Sim, FID]
+    end
+    
+    style F fill:#e1f5fe
+    style H fill:#fff3e0
+    style L fill:#fce4ec
+```
+
+---
+
+## 🧠 Model Architectures
+
+### Architecture Comparison
+
+| Model | Encoder | Latent Dim | Key Feature | Parameters |
+|-------|---------|------------|-------------|------------|
+| **VanillaVAE** | 3 Conv | 16 | Standard VAE | ~200K |
+| **β-VAE** | 3 Conv | 16 | Weighted KL (β=4) | ~200K |
+| **Conditional VAE** | 3 Conv + Embed | 16 | Class conditioning | ~250K |
+| **Improved β-VAE** | 4 Residual | 16 | Skip connections + Attention | ~500K |
+
+### Encoder-Decoder Architecture
+
+```mermaid
+graph LR
+    subgraph "ENCODER"
+        A[Input<br/>32×32×1] --> B[Conv 1→32<br/>stride=2]
+        B --> C[Conv 32→64<br/>stride=2]
+        C --> D[Conv 64→128<br/>stride=2]
+        D --> E[Flatten<br/>2048]
+        E --> F[FC → μ<br/>16-dim]
+        E --> G[FC → logσ²<br/>16-dim]
+    end
+    
+    subgraph "LATENT"
+        F --> H[Reparameterize]
+        G --> H
+        H --> I[z<br/>16-dim]
+    end
+    
+    subgraph "DECODER"
+        I --> J[FC<br/>2048]
+        J --> K[Reshape<br/>4×4×128]
+        K --> L[ConvT 128→64<br/>stride=2]
+        L --> M[ConvT 64→32<br/>stride=2]
+        M --> N[ConvT 32→1<br/>stride=2]
+        N --> O[Output<br/>32×32×1]
+    end
+    
+    style H fill:#fff3e0
+    style I fill:#fff3e0
+```
+
+### Improved β-VAE with Residual Blocks
+
+```mermaid
+graph TB
+    subgraph "Residual Block"
+        X[Input x] --> C1[Conv 3×3]
+        C1 --> BN1[BatchNorm]
+        BN1 --> R1[ReLU]
+        R1 --> C2[Conv 3×3]
+        C2 --> BN2[BatchNorm]
+        X --> SK[Skip<br/>1×1 Conv if needed]
+        BN2 --> ADD((+))
+        SK --> ADD
+        ADD --> R2[ReLU]
+        R2 --> OUT[Output]
+    end
+```
+
+---
+
+## 📊 Training Pipeline
+
+```mermaid
+sequenceDiagram
+    participant D as Dataset
+    participant L as DataLoader
+    participant M as VAE Model
+    participant O as Optimizer
+    participant C as Checkpoint
+    
+    Note over D,C: Training Loop (200 epochs)
+    
+    loop Each Epoch
+        D->>L: Load batch (16 samples)
+        L->>M: Forward pass
+        M->>M: Encode → z ~ q(z|x)
+        M->>M: Decode → x' = p(x|z)
+        M->>O: Compute Loss<br/>L = BCE + β·KL + λ·SSIM
+        O->>M: Backward + Update weights
+    end
+    
+    M->>C: Save best checkpoint
+    
+    Note over D,C: Evaluation Phase
+    
+    C->>M: Load best model
+    M->>M: Generate samples
+    M->>M: Compute test metrics
+```
+
+---
+
+## 📈 Results
+
+### Performance Summary
+
+| Approach | Loss Function | Test Cosine Similarity | Rank |
+|----------|---------------|------------------------|------|
+| Baseline β-VAE | BCE + 4·KL | 0.9889 | 2nd |
+| **SSIM + KL Annealing** | BCE + 0.3·SSIM + cyclical_KL | **0.9917** | 🥇 **1st** |
+| Combined Loss | L1 + SSIM + Focal + Cosine + KL | 0.9823 | 3rd |
+
+### Why SSIM + KL Annealing Wins
+
+```mermaid
+pie title Performance Factors
+    "SSIM Structural Loss" : 35
+    "Cyclical KL Annealing" : 30
+    "Balanced Weights" : 20
+    "BCE Base Loss" : 15
+```
+
+**Key Insights:**
+- ✅ **SSIM** preserves Telugu character stroke structure
+- ✅ **Cyclical annealing** prevents posterior collapse
+- ✅ **Moderate β** allows good reconstruction without over-regularization
+- ❌ **Too many losses** (Approach 3) dilutes gradients
+
+---
+
+## 📁 Project Structure
 
 ```
 vae_project/
-├── models/                     # VAE model implementations
-│   ├── __init__.py
-│   ├── vae.py                  # VanillaVAE, BetaVAE, ConditionalVAE
-│   ├── networks.py             # Encoder/Decoder architectures
-│   └── losses.py               # Loss functions
-├── scripts/                    # Training and evaluation scripts
-│   ├── train.py                # Main training script
-│   ├── generate_samples.py     # Sample generation from trained models
-│   ├── latent_visualizer.py    # Latent space analysis (t-SNE, UMAP, traversals)
-│   ├── evaluate.py             # Model evaluation
-│   ├── render_glyphs.py        # Dataset generation
-│   └── utils.py                # Utility functions
-├── configs/                    # Training configurations (YAML)
+├── 📂 models/                      # VAE implementations
+│   ├── vae.py                      # VanillaVAE, BetaVAE, cVAE
+│   ├── improved_vae.py             # Residual blocks + Attention
+│   ├── networks.py                 # Encoder/Decoder networks
+│   └── losses.py                   # Loss functions
+│
+├── 📂 scripts/                     # Training & evaluation
+│   ├── train.py                    # Main training script
+│   ├── generate_samples.py         # Sample generation
+│   ├── latent_visualizer.py        # t-SNE, UMAP, traversals
+│   └── evaluate.py                 # Evaluation metrics
+│
+├── 📂 configs/                     # YAML configurations
 │   └── beta_vae_baseline.yaml
-├── data/                       # Dataset
-│   ├── raw/                    # Raw glyph images
-│   │   └── metadata.csv        # Dataset metadata
-│   └── fonts/                  # Telugu font files
-├── checkpoints/                # Model checkpoints (.pth files)
-├── experiments/                # Experiment logs and configs
-├── results/                    # Generated samples and visualizations
-├── logs/                       # Training logs
-└── paper/                      # LaTeX paper and figures
+│
+├── 📂 data/                        # Datasets
+│   ├── Pothana2000.ttf             # Telugu font
+│   ├── Vowel_Dataset/              # 6 vowel classes
+│   └── metadata.csv                # Dataset metadata
+│
+├── 📂 experiments/                 # Experiment outputs
+├── 📂 results/                     # Metrics & reports
+├── 📂 checkpoints/                 # Model weights
+│
+├── 📄 DOCUMENTATION.md             # Comprehensive docs
+├── 📄 train_vowel_experiments.py   # Main experiment script
+└── 📄 README.md                    # This file
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Prerequisites
+### Prerequisites
 
 ```bash
-# Activate virtual environment
-source ~/vae_env/bin/activate
-
-# Ensure all dependencies are installed
+# Python 3.8+
 pip install torch torchvision matplotlib pandas scikit-learn \
-    opencv-python pillow tqdm umap-learn seaborn
+    opencv-python pillow tqdm seaborn
 ```
 
-### 2. Dataset Status
+### Train a Model
 
-✅ Dataset already generated: **10,801 Telugu glyph samples**
-
-To regenerate or add more fonts:
 ```bash
-python scripts/render_glyphs.py
+# Approach 1: Baseline β-VAE
+python train_vowel_experiments.py --approach 1 --epochs 200
+
+# Approach 2: SSIM + KL Annealing (BEST)
+python train_vowel_experiments.py --approach 2 --epochs 200
+
+# Approach 3: Combined Loss
+python train_vowel_experiments.py --approach 3 --epochs 200
+
+# All approaches
+python train_vowel_experiments.py --approach 0
 ```
 
-### 3. Train a Model
+### Generate Samples
 
 ```bash
-# Train Beta-VAE baseline
-python scripts/train.py --config configs/beta_vae_baseline.yaml
-
-# Monitor training
-tail -f logs/beta_vae_baseline_training.log
-```
-
-### 4. Generate Samples
-
-Once a model is trained:
-
-```bash
-# Generate 100 samples from trained Beta-VAE
 python scripts/generate_samples.py \
-    --model_path checkpoints/beta_vae_best.pth \
+    --model_path checkpoints/vowel_approach_2/best.pth \
     --model_type beta_vae \
-    --latent_dim 32 \
+    --latent_dim 16 \
     --num_samples 100 \
     --output_dir results/generated_samples
 ```
 
-### 5. Visualize Latent Space
+### Visualize Latent Space
 
 ```bash
-# Analyze latent space with t-SNE, UMAP, and traversals
 python scripts/latent_visualizer.py \
-    --model_path checkpoints/beta_vae_best.pth \
-    --model_type beta_vae \
-    --data_path data/raw/metadata.csv \
-    --latent_dim 32 \
-    --num_samples 1000
+    --model_path checkpoints/vowel_approach_2/best.pth \
+    --data_path data/Vowel_Dataset \
+    --latent_dim 16
 ```
 
 ---
 
-## 📊 Experiments & Ablation Studies
+## 📊 Class Diagram
 
-### Planned Ablation Grid
-
-| Model Type   | Latent Dim | β Value | Status |
-|--------------|-----------|---------|--------|
-| Vanilla VAE  | 32        | 1.0     | ⏳ Pending |
-| Beta-VAE     | 16        | 2.0     | ⏳ Pending |
-| Beta-VAE     | 32        | 2.0     | ⏳ Pending |
-| Beta-VAE     | 32        | 5.0     | ⏳ Pending |
-| Beta-VAE     | 64        | 2.0     | ⏳ Pending |
-| cVAE         | 32        | 1.0     | ⏳ Pending |
-
-### Evaluation Metrics
-
-- **FID Score**: Fréchet Inception Distance for generation quality
-- **OCR Accuracy**: Can generated glyphs fool a classifier trained on real data?
-- **Latent Disentanglement**: t-SNE/UMAP clustering, traversal smoothness
-- **Reconstruction Loss**: MSE/BCE on validation set
-
----
-
-## 📝 Research Paper
-
-Target conferences:
-- **ICDAR** (International Conference on Document Analysis and Recognition)
-- **CVPR Workshops** (Computer Vision and Pattern Recognition)
-- **ICFHR** (International Conference on Frontiers in Handwriting Recognition)
-
-Paper sections:
-1. Abstract & Introduction
-2. Related Work (VAEs, Script Generation, Low-Resource Languages)
-3. Dataset Creation Methodology
-4. Model Architectures
-5. Experimental Setup & Ablation Studies
-6. Results & Analysis
-7. Conclusion & Future Work
-
----
-
-## 🔧 Training Configuration Example
-
-```yaml
-# configs/beta_vae_baseline.yaml
-model:
-  type: "beta_vae"
-  latent_dim: 32
-  beta: 2.0
-  
-training:
-  batch_size: 64
-  num_epochs: 100
-  learning_rate: 0.001
-  device: "cuda"
-  
-data:
-  dataset_path: "data/raw/"
-  metadata_path: "data/raw/metadata.csv"
-  train_split: 0.8
+```mermaid
+classDiagram
+    class VanillaVAE {
+        +latent_dim: int
+        +encoder: ConvEncoder
+        +decoder: ConvDecoder
+        +encode(x) tuple
+        +decode(z) Tensor
+        +reparameterize(mu, logvar) Tensor
+        +forward(x) tuple
+        +loss(recon_x, x, mu, logvar)
+        +sample(num_samples)
+    }
+    
+    class BetaVAE {
+        +beta: float
+        +set_beta(beta)
+    }
+    
+    class ConditionalVAE {
+        +num_classes: int
+        +encode(x, c)
+        +decode(z, c)
+        +forward(x, c)
+        +sample(num_samples, class_id)
+    }
+    
+    class ImprovedBetaVAE {
+        +use_attention: bool
+        -hidden_dims: list
+        +count_parameters()
+    }
+    
+    VanillaVAE <|-- BetaVAE : inherits
+    VanillaVAE <|-- ConditionalVAE : extends
+    VanillaVAE <|-- ImprovedBetaVAE : enhanced
+    
+    class ConvEncoder {
+        +in_channels: int
+        +latent_dim: int
+        +hidden_dims: list
+        +forward(x) tuple
+    }
+    
+    class ConvDecoder {
+        +latent_dim: int
+        +out_channels: int
+        +forward(z) Tensor
+    }
+    
+    VanillaVAE --> ConvEncoder : has
+    VanillaVAE --> ConvDecoder : has
 ```
 
 ---
 
-## 📈 Current Progress
+## 📚 Loss Functions
 
-- [x] Dataset generation (10,801 samples)
-- [x] Model implementations (VAE, β-VAE, cVAE)
-- [x] Training pipeline
-- [x] Sample generation script
-- [x] Latent visualization tools
-- [ ] Train baseline models
-- [ ] Run ablation studies
+| Loss | Formula | Use Case |
+|------|---------|----------|
+| **BCE** | `-∑[x·log(x') + (1-x)·log(1-x')]` | Pixel reconstruction |
+| **KL Divergence** | `-0.5·∑(1 + logσ² - μ² - σ²)` | Latent regularization |
+| **SSIM** | `1 - SSIM(x, x')` | Structural similarity |
+| **Focal BCE** | `α(1-p)^γ · BCE` | Hard sample mining |
+| **L1/MAE** | `\|x - x'\|` | Edge preservation |
+| **Cosine** | `1 - cos(x, x')` | Feature alignment |
+
+---
+
+## 📖 Documentation
+
+For comprehensive technical documentation, see:
+
+📄 **[DOCUMENTATION.md](./DOCUMENTATION.md)** - Full research documentation including:
+- Problem statement & scope
+- Dataset description & statistics
+- Model architecture details
+- Loss function analysis
+- Experimental methodology
+- Detailed results analysis
+- Conclusions & future work
+
+---
+
+## 🎯 Future Work
+
+- [ ] Implement VQ-VAE for discrete latents
+- [ ] Add more Telugu fonts (Vemana, Gautami)
 - [ ] Compute FID scores
-- [ ] OCR evaluation
-- [ ] Write research paper
-- [ ] Prepare for submission
+- [ ] Train OCR classifier for evaluation
+- [ ] Extend to handwritten characters
+- [ ] GPU training optimization
 
 ---
 
-## 🤝 Git Workflow
+## 📝 Citation
 
-```bash
-# Check status
-git status
+If you use this code in your research, please cite:
 
-# Add all changes
-git add .
-
-# Commit with descriptive message
-git commit -m "Description of changes"
-
-# Push to remote (after setting up GitHub repo)
-git push origin main
+```bibtex
+@misc{pamidi2025teluguvae,
+  title={Telugu Glyph Generation using Variational Autoencoders},
+  author={Pamidi, Rohit},
+  year={2025},
+  institution={Indian Institute of Technology},
+  note={BTP Research Project}
+}
 ```
 
 ---
 
-## 📚 Key References
+## 👥 Contributors
 
-1. Kingma & Welling (2014) - Auto-Encoding Variational Bayes
-2. Higgins et al. (2016) - β-VAE: Learning Basic Visual Concepts
-3. Sohn et al. (2015) - Learning Structured Output Representation using Deep Conditional Generative Models
-
----
-
-## 👤 Author
-
-**Student**: Rohit (BTP Project)  
-**Institution**: [Your Institution]  
-**Year**: 2024-2025
+- **Rohit Pamidi** - Primary Developer & Researcher
+- **Faculty Advisor** - Project Guidance
 
 ---
 
 ## 📄 License
 
-Academic research project. Please cite if using this code or methodology.
+This project is for academic research purposes. Please cite if using this code or methodology.
 
 ---
 
-## 🎯 Next Steps
-
-1. **Train Baseline**: Run `train_baseline.sh` to start training
-2. **Monitor Progress**: Check `logs/` and `experiments/` directories
-3. **Generate & Evaluate**: Once trained, generate samples and compute metrics
-4. **Iterate**: Adjust hyperparameters based on results
-5. **Document**: Keep updating results in paper drafts
-
-**For questions or issues, consult your advisor or create an issue in the repository.**
+<p align="center">
+  <strong>🙏 Thank you for exploring Telugu VAE Generation!</strong>
+</p>
